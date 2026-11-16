@@ -1,0 +1,6 @@
+reader-agent/python/
+dist/
+__pycache__/
+*.pyc
+*.log
+

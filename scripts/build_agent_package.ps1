@@ -1,18 +1,36 @@
-# StudySpace カードリーダー中継アプリ 配布用ZIP生成スクリプト
+# StudySpace PC接続型カードリーダー中継アプリ 配布用ZIP生成スクリプト (Windows / macOS)
+param(
+    [string]$AgentRepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    [string]$DistDir = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")).Path "dist")
+)
+
 $ErrorActionPreference = "Stop"
 
-$src = "C:\Users\user\.gemini\antigravity-ide\scratch\studyspace-entry-system\reader-agent"
-$distDir = "C:\Users\user\.gemini\antigravity-ide\scratch\studyspace-entry-system\server\public\downloads"
-$tempDir = "C:\Users\user\.gemini\antigravity-ide\scratch\studyspace-entry-system\reader-agent-dist"
-$zipPath = Join-Path $distDir "studyspace-reader-agent.zip"
+$src = Join-Path $AgentRepoDir "reader-agent"
+$tempDir = Join-Path $env:TEMP "studyspace_pc_reader_win_pkg"
+$zipPath = Join-Path $DistDir "studyspace-reader-agent.zip"
 $coreDir = Join-Path $tempDir ".core"
 
-Write-Host "Creating output directory: $distDir"
-if (-not (Test-Path $distDir)) {
-    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+Write-Host "=== StudySpace PC Reader Agent Package Builder ==="
+Write-Host "Source Dir : $src"
+Write-Host "Output Dir : $DistDir"
+
+if (-not (Test-Path $DistDir)) {
+    New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 }
 
-Write-Host "Preparing temporary files in: $tempDir"
+# Python Embeddable 環境が未配置の場合は公式から自動取得
+$pyDir = Join-Path $src "python"
+$pyExe = Join-Path $pyDir "python.exe"
+if (-not (Test-Path $pyExe)) {
+    Write-Host "Downloading Python 3.11.9 embeddable package (amd64)..."
+    $pyZip = Join-Path $env:TEMP "python-embed.zip"
+    Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip" -OutFile $pyZip
+    New-Item -ItemType Directory -Path $pyDir -Force | Out-Null
+    Expand-Archive -Path $pyZip -DestinationPath $pyDir -Force
+    Remove-Item -Force $pyZip
+}
+
 if (Test-Path $tempDir) {
     Remove-Item -Recurse -Force $tempDir
 }
@@ -28,8 +46,6 @@ $setupWizardCs = Join-Path $src "SetupWizard.cs"
 & $csc /nologo /codepage:65001 /target:winexe /win32icon:$ico /out:$setupExePath $setupWizardCs
 
 # StudySpace.exe (カードリーダー常駐ランチャー)
-
-# StudySpace.exe
 $agentCs = @"
 using System;
 using System.Diagnostics;
@@ -75,15 +91,13 @@ $agentExePath = Join-Path $src "StudySpace.exe"
 & $csc /nologo /codepage:65001 /target:winexe /win32icon:$ico /out:$agentExePath $agentCsPath
 Remove-Item $agentCsPath
 
-Write-Host "Copying setup.exe to root (only setup.exe is visible to users)..."
 if (-not (Test-Path $setupExePath)) {
     throw "setup.exe was not created at $setupExePath"
 }
 Copy-Item -Path $setupExePath -Destination (Join-Path $tempDir "setup.exe") -Force
 
 # 内部ファイルはすべて .core に格納
-Write-Host "Copying python directory..."
-Copy-Item -Recurse -Path (Join-Path $src "python") -Destination (Join-Path $coreDir "python")
+Copy-Item -Recurse -Path $pyDir -Destination (Join-Path $coreDir "python")
 Copy-Item -Path (Join-Path $src "reader_agent.py") -Destination $coreDir
 Copy-Item -Path (Join-Path $src "setup_wizard.py") -Destination $coreDir
 Copy-Item -Path (Join-Path $src "setup_gui.ps1") -Destination $coreDir
@@ -91,25 +105,25 @@ Copy-Item -Path (Join-Path $src "start.bat") -Destination $coreDir
 Copy-Item -Path $agentExePath -Destination $coreDir
 Copy-Item -Path $ico -Destination $coreDir
 Copy-Item -Path (Join-Path $src "README.txt") -Destination $coreDir
+
 if (Test-Path $zipPath) {
     Remove-Item -Force $zipPath
 }
 
-Write-Host "Compressing archive to: $zipPath"
+Write-Host "Compressing Windows archive to: $zipPath"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
 
-# Windows用ZIPの複製（-win.zipとしても保存）
 Remove-Item -Recurse -Force $tempDir
-$zipWinPath = Join-Path $distDir "studyspace-reader-agent-win.zip"
+$zipWinPath = Join-Path $DistDir "studyspace-reader-agent-win.zip"
 Copy-Item -Path $zipPath -Destination $zipWinPath -Force
 
 # ==============================================================================
 # 2. macOS 向けパッケージ生成 (studyspace-reader-agent-mac.zip)
 # ==============================================================================
 Write-Host "`n--- Generating macOS Package ---"
-$tempDirMac = "C:\Users\user\.gemini\antigravity-ide\scratch\studyspace-entry-system\reader-agent-dist-mac"
-$zipMacPath = Join-Path $distDir "studyspace-reader-agent-mac.zip"
+$tempDirMac = Join-Path $env:TEMP "studyspace_pc_reader_mac_pkg"
+$zipMacPath = Join-Path $DistDir "studyspace-reader-agent-mac.zip"
 $coreDirMac = Join-Path $tempDirMac ".core"
 
 if (Test-Path $tempDirMac) {
@@ -118,13 +132,11 @@ if (Test-Path $tempDirMac) {
 New-Item -ItemType Directory -Path $coreDirMac -Force | Out-Null
 
 $macSetupCmd = Join-Path $src "setup_mac.command"
-Write-Host "macSetupCmd is: $macSetupCmd"
 if (-not (Test-Path $macSetupCmd)) {
     throw "setup_mac.command not found at $macSetupCmd"
 }
 Copy-Item -Path $macSetupCmd -Destination (Join-Path $tempDirMac "setup.command") -Force
 
-# 内部ファイルは .core に格納
 Copy-Item -Path (Join-Path $src "reader_agent.py") -Destination $coreDirMac
 Copy-Item -Path (Join-Path $src "start_mac.command") -Destination $coreDirMac
 Copy-Item -Path $ico -Destination $coreDirMac
@@ -138,7 +150,5 @@ Write-Host "Compressing macOS archive to: $zipMacPath"
 [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDirMac, $zipMacPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
 Remove-Item -Recurse -Force $tempDirMac
 
-$zipMacItem = Get-Item $zipMacPath
-$sizeMacMb = [math]::Round($zipMacItem.Length / 1KB, 1)
-Write-Host "Successfully generated macOS package: $zipMacPath ($sizeMacMb KB, $($zipMacItem.Length) bytes)"
-Write-Host "`nAll Windows and macOS packages generated successfully in: $distDir"
+Write-Host "✅ Generated PC Reader Agent packages successfully:"
+Get-Item (Join-Path $DistDir "studyspace-reader-agent*.zip") | Select-Object Name, Length

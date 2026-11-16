@@ -1,0 +1,45 @@
+name: Build PC Reader Agent Package
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-agent:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Windows & macOS PC Reader Agent ZIPs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          ./scripts/build_agent_package.ps1 -AgentRepoDir $PWD -DistDir "$PWD/dist"
+
+      - name: Upload Agent ZIP Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: studyspace-pc-reader-agents
+          path: dist/studyspace-reader-agent*.zip
+
+      - name: Publish Agent ZIPs to Latest GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest PC Card Reader Agent
+          body: |
+            StudySpace PC接続型ICカードリーダー（Sony PaSoRi RC-S380 / RC-S300 等）用の常駐エージェント＆セットアップパッケージです。
+            - **Windows用**: `studyspace-reader-agent-win.zip` (`setup.exe`)
+            - **macOS用**: `studyspace-reader-agent-mac.zip` (`setup.command`)
+          prerelease: false
+          make_latest: true
+          files: |
+            dist/studyspace-reader-agent-win.zip
+            dist/studyspace-reader-agent-mac.zip
+            dist/studyspace-reader-agent.zip
+
