@@ -116,7 +116,7 @@ echo "デスクトップショートカット作成完了: $DESKTOP_LAUNCHER" >>
 
 # 6. セットアップ完了通知ダイアログ
 RES_ACTION=$(osascript -e "try
-    display dialog \"🎉 StudySpace カードリーダーのセットアップが完了しました！\n\n・デスクトップに『StudySpace カードリーダー』を作成しました。\n・管理画面の『端末管理』タブで端末を承認すると打刻が可能になります。\" with title \"セットアップ完了\" buttons {\"閉じる\", \"今すぐ起動\"} default button \"今すぐ起動\" with icon note
+    display dialog \"🎉 StudySpace カードリーダーのセットアップが完了しました！\n\n・デスクトップに『StudySpace カードリーダー』を作成しました。\n・すぐにカード打刻および未登録カードの会員登録が可能です。\" with title \"セットアップ完了\" buttons {\"閉じる\", \"今すぐ起動\"} default button \"今すぐ起動\" with icon note
     button returned of result
 on error
     return \"閉じる\"

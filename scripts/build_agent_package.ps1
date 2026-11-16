@@ -1,4 +1,4 @@
-# StudySpace PC接続型カードリーダー中継アプリ 配布用ZIP生成スクリプト (Windows / macOS)
+﻿# StudySpace PC接続型カードリーダー中継アプリ 配布用ZIP生成スクリプト (Windows / macOS)
 param(
     [string]$AgentRepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$DistDir = (Join-Path (Resolve-Path (Join-Path $PSScriptRoot "..")).Path "dist")
@@ -146,8 +146,37 @@ if (Test-Path $zipMacPath) {
     Remove-Item -Force $zipMacPath
 }
 
-Write-Host "Compressing macOS archive to: $zipMacPath"
-[System.IO.Compression.ZipFile]::CreateFromDirectory($tempDirMac, $zipMacPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+Write-Host "Normalizing LF line endings and setting Unix 0755 permissions for macOS archive: $zipMacPath"
+& $pyExe -c "
+import os, zipfile
+
+src_dir = r'$tempDirMac'
+zip_path = r'$zipMacPath'
+
+for root, _, files in os.walk(src_dir):
+    for f in files:
+        if f.endswith(('.command', '.py', '.txt', '.sh')):
+            p = os.path.join(root, f)
+            with open(p, 'rb') as fp:
+                data = fp.read().replace(b'\r\n', b'\n')
+            with open(p, 'wb') as fp:
+                fp.write(data)
+
+with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    for root, _, files in os.walk(src_dir):
+        for f in files:
+            full_path = os.path.join(root, f)
+            rel_path = os.path.relpath(full_path, src_dir).replace('\\', '/')
+            info = zipfile.ZipInfo(rel_path)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3  # Unix
+            if f.endswith(('.command', '.sh')):
+                info.external_attr = (0o100755 << 16)
+            else:
+                info.external_attr = (0o100644 << 16)
+            with open(full_path, 'rb') as fp:
+                zf.writestr(info, fp.read())
+"
 Remove-Item -Recurse -Force $tempDirMac
 
 Write-Host "✅ Generated PC Reader Agent packages successfully:"
